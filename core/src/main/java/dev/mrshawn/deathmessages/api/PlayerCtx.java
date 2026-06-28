@@ -38,7 +38,6 @@ public class PlayerCtx {
     //private Location location; // Uncomment if we really need to track it and put it in onMove
     private Inventory inventory;
     private int cooldown = 0;
-    private @Nullable WrappedTask cooldownTask;
     private @Nullable WrappedTask lastEntityTask;
 
     private static final Map<UUID, PlayerCtx> PLAYER_CONTEXTS = new ConcurrentHashMap<>();
@@ -173,12 +172,6 @@ public class PlayerCtx {
 
     public void setCooldown() {
         cooldown = FileStore.CONFIG.getInt(Config.COOLDOWN);
-        cooldownTask = DeathMessages.getInstance().foliaLib.getScheduler().runTimer(() -> {
-            if (cooldown <= 0) {
-                cooldownTask.cancel();
-            }
-            cooldown--;
-        }, 1, 20);
     }
 
     public Inventory getInventory() {
@@ -200,6 +193,21 @@ public class PlayerCtx {
     }
 
     public static void remove(UUID uuid) {
-        PLAYER_CONTEXTS.remove(uuid);
+        PlayerCtx ctx = PLAYER_CONTEXTS.remove(uuid);
+        if (ctx != null && ctx.lastEntityTask != null) {
+            ctx.lastEntityTask.cancel();
+        }
+    }
+
+    /**
+     * Called by the global cooldown ticker in DeathMessages every second.
+     * Decrements the cooldown counter for all players with an active cooldown.
+     */
+    public static void tickCooldowns() {
+        for (PlayerCtx ctx : PLAYER_CONTEXTS.values()) {
+            if (ctx.cooldown > 0) {
+                ctx.cooldown--;
+            }
+        }
     }
 }
