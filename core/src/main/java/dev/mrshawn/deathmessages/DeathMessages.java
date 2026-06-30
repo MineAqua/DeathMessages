@@ -2,6 +2,7 @@ package dev.mrshawn.deathmessages;
 
 import com.tcoded.folialib.FoliaLib;
 import com.tcoded.folialib.wrapper.task.WrappedTask;
+import dev.mrshawn.deathmessages.api.EntityCtx;
 import dev.mrshawn.deathmessages.api.PlayerCtx;
 import dev.mrshawn.deathmessages.commands.CommandManager;
 import dev.mrshawn.deathmessages.commands.TabCompleter;
@@ -138,6 +139,8 @@ public class DeathMessages extends JavaPlugin {
     private void initCooldownTicker() {
         cooldownTickTask = foliaLib.getScheduler().runTimer(() -> {
             PlayerCtx.tickCooldowns();
+            PlayerCtx.cleanExpiredDamagers();
+            EntityCtx.cleanExpiredEntities();
         }, 20, 20);
     }
 

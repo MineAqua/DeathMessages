@@ -1,7 +1,5 @@
 package dev.mrshawn.deathmessages.api;
 
-import com.tcoded.folialib.wrapper.task.WrappedTask;
-import dev.mrshawn.deathmessages.DeathMessages;
 import dev.mrshawn.deathmessages.config.UserData;
 import dev.mrshawn.deathmessages.config.files.Config;
 import dev.mrshawn.deathmessages.config.files.FileStore;
@@ -38,7 +36,7 @@ public class PlayerCtx {
     //private Location location; // Uncomment if we really need to track it and put it in onMove
     private Inventory inventory;
     private int cooldown = 0;
-    private @Nullable WrappedTask lastEntityTask;
+    private long lastDamagerTimestamp = 0;
 
     private static final Map<UUID, PlayerCtx> PLAYER_CONTEXTS = new ConcurrentHashMap<>();
 
@@ -130,11 +128,7 @@ public class PlayerCtx {
         setLastExplosiveEntity(null);
         setLastProjectileEntity(null);
         this.lastEntityDamager = damager;
-
-        if (lastEntityTask != null) {
-            lastEntityTask.cancel();
-        }
-        lastEntityTask = DeathMessages.getInstance().foliaLib.getScheduler().runLater(() -> setLastEntityDamager(null), FileStore.CONFIG.getInt(Config.EXPIRE_LAST_DAMAGE_EXPIRE_PLAYER) * 20L);
+        this.lastDamagerTimestamp = damager != null ? System.currentTimeMillis() : 0;
     }
 
     public @Nullable Entity getLastExplosiveEntity() {
@@ -193,10 +187,7 @@ public class PlayerCtx {
     }
 
     public static void remove(UUID uuid) {
-        PlayerCtx ctx = PLAYER_CONTEXTS.remove(uuid);
-        if (ctx != null && ctx.lastEntityTask != null) {
-            ctx.lastEntityTask.cancel();
-        }
+        PLAYER_CONTEXTS.remove(uuid);
     }
 
     /**
@@ -207,6 +198,20 @@ public class PlayerCtx {
         for (PlayerCtx ctx : PLAYER_CONTEXTS.values()) {
             if (ctx.cooldown > 0) {
                 ctx.cooldown--;
+            }
+        }
+    }
+
+    /**
+     * Called by the global ticker. Clears lastEntityDamager for players whose damage attribution has expired.
+     */
+    public static void cleanExpiredDamagers() {
+        long now = System.currentTimeMillis();
+        long expireMillis = FileStore.CONFIG.getInt(Config.EXPIRE_LAST_DAMAGE_EXPIRE_PLAYER) * 1000L;
+        for (PlayerCtx ctx : PLAYER_CONTEXTS.values()) {
+            if (ctx.lastEntityDamager != null && ctx.lastDamagerTimestamp > 0
+                    && (now - ctx.lastDamagerTimestamp) >= expireMillis) {
+                ctx.setLastEntityDamager(null);
             }
         }
     }
